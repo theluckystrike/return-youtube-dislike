@@ -19,18 +19,12 @@ const teaserState = {
   storageListener: null,
 };
 
-export async function initPremiumTeaser() {
+export function initPremiumTeaser() {
   if (teaserState.initialized) return;
   teaserState.initialized = true;
 
+  syncSuppressionWithSettings();
   document.addEventListener("yt-navigate-finish", handleNavigation, { passive: true });
-
-  try {
-    await syncSuppressionWithSettings();
-  } catch {
-    // Ignore storage sync failures; teaser suppression will remain manual.
-  }
-
   handleNavigation();
 }
 
@@ -64,39 +58,17 @@ export function setTeaserSuppressed(shouldSuppress, reason = TEASER_SUPPRESSION_
   }
 }
 
-function applySettingsSuppression(shouldHide, persist = false) {
-  const normalized = shouldHide === true;
-  extConfig.hidePremiumTeaser = normalized;
-  setTeaserSuppressed(normalized, TEASER_SUPPRESSION_REASON_SETTINGS);
-
-  if (!persist) {
-    return;
-  }
-
-  try {
-    const browser = getBrowser();
-    browser?.storage?.sync?.set?.({ hidePremiumTeaser: normalized });
-  } catch {
-    // Ignore persistence failures; suppression state already applied locally.
-  }
-}
-
-async function syncSuppressionWithSettings() {
+function syncSuppressionWithSettings() {
   try {
     const browser = getBrowser();
     if (!browser?.storage?.sync) {
       return;
     }
 
-    await new Promise((resolve) => {
-      browser.storage.sync.get(["hidePremiumTeaser"], (res) => {
-        try {
-          const shouldHide = res?.hidePremiumTeaser === true;
-          applySettingsSuppression(shouldHide);
-        } finally {
-          resolve();
-        }
-      });
+    browser.storage.sync.get(["hidePremiumTeaser"], (res) => {
+      const shouldHide = res?.hidePremiumTeaser === true;
+      extConfig.hidePremiumTeaser = shouldHide;
+      setTeaserSuppressed(shouldHide, TEASER_SUPPRESSION_REASON_SETTINGS);
     });
 
     if (!teaserState.storageListener) {
@@ -105,7 +77,8 @@ async function syncSuppressionWithSettings() {
           return;
         }
         const shouldHide = changes.hidePremiumTeaser.newValue === true;
-        applySettingsSuppression(shouldHide);
+        extConfig.hidePremiumTeaser = shouldHide;
+        setTeaserSuppressed(shouldHide, TEASER_SUPPRESSION_REASON_SETTINGS);
       };
       teaserState.storageListener = listener;
       browser.storage.onChanged.addListener(listener);
@@ -246,11 +219,6 @@ function ensurePanel() {
     });
   }
 
-  const dismissButton = panel.querySelector("#ryd-premium-teaser-close");
-  if (dismissButton) {
-    dismissButton.addEventListener("click", handleManualDismiss);
-  }
-
   teaserState.panelElement = panel;
   return panel;
 }
@@ -330,7 +298,6 @@ function createPanelMarkup() {
   const subtitle = localize("premiumTeaser_subtitle");
   const ctaText = localize("premiumTeaser_cta");
   const secondaryText = localize("premiumTeaser_learn");
-  const closeLabel = localize("hidePremiumTeaser");
   const statRaw = localize("premiumTeaser_statRaw");
   const statDislikes = localize("premiumTeaser_statDislikes");
   const statLikes = localize("premiumTeaser_statLikes");
@@ -351,9 +318,6 @@ function createPanelMarkup() {
         <a href="${PATREON_JOIN_URL}" class="ryd-premium-teaser__cta" id="ryd-premium-teaser-cta">${ctaText}</a>
         <a href="${CHANGELOG_URL}" class="ryd-premium-teaser__secondary" id="ryd-premium-teaser-learn">${secondaryText}</a>
       </div>
-      <button type="button" class="ryd-premium-teaser__close" id="ryd-premium-teaser-close" aria-label="${closeLabel}" title="${closeLabel}">
-        <span class="ryd-premium-teaser__close-icon" aria-hidden="true">&times;</span>
-      </button>
     </header>
     <div class="ryd-premium-teaser__body">
       <div class="ryd-premium-teaser__stats" role="status" aria-live="polite">
@@ -410,10 +374,4 @@ function openTab(url) {
   } catch {
     // ignore navigation failures
   }
-}
-
-function handleManualDismiss(event) {
-  event?.preventDefault?.();
-  event?.stopPropagation?.();
-  applySettingsSuppression(true, true);
 }
