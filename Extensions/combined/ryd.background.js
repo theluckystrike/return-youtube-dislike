@@ -5,6 +5,7 @@ const voteDisabledIconName = config.voteDisabledIconName;
 const defaultIconName = config.defaultIconName;
 let api;
 const CHANGELOG_STORAGE_KEY = "lastShownChangelogVersion";
+const PENDING_CHANGELOG_STORAGE_KEY = "pendingChangelogVersion";
 
 /** stores extension's global config */
 let extConfig = { ...config.defaultExtConfig };
@@ -251,16 +252,86 @@ function openChangelogTab(version) {
   }
 }
 
-function persistChangelogVersion(version) {
+function scheduleChangelogVersion(version) {
   const storage = api?.storage?.local;
   if (!storage || typeof storage.set !== "function") {
+    return false;
+  }
+  try {
+    const valueToStore = version || true;
+    storage.set({ [PENDING_CHANGELOG_STORAGE_KEY]: valueToStore }, () => {
+      if (api.runtime.lastError) {
+        console.debug("Failed to persist pending changelog version:", api.runtime.lastError.message);
+      }
+    });
+    return true;
+  } catch (error) {
+    console.debug("Storage set failed for pending changelog version", error);
+    return false;
+  }
+}
+
+function clearPendingChangelogVersion() {
+  const storage = api?.storage?.local;
+  if (!storage || typeof storage.remove !== "function") {
     return;
   }
   try {
-    storage.set({ [CHANGELOG_STORAGE_KEY]: version }, () => {
+    storage.remove(PENDING_CHANGELOG_STORAGE_KEY, () => {
+      if (api.runtime.lastError) {
+        console.debug("Failed to clear pending changelog version:", api.runtime.lastError.message);
+      }
+    });
+  } catch (error) {
+    console.debug("Storage remove failed for pending changelog version", error);
+  }
+}
+
+function showPendingChangelogIfNeeded() {
+  const storage = api?.storage?.local;
+  if (!storage || typeof storage.get !== "function") {
+    return;
+  }
+
+  try {
+    storage.get([PENDING_CHANGELOG_STORAGE_KEY, CHANGELOG_STORAGE_KEY], (result) => {
+      if (api.runtime.lastError) {
+        console.debug("Changelog storage read failed:", api.runtime.lastError.message);
+        return;
+      }
+
+      const pendingValue = result?.[PENDING_CHANGELOG_STORAGE_KEY];
+      if (pendingValue === undefined || pendingValue === null || pendingValue === "") {
+        return;
+      }
+
+      const lastShownValue = result?.[CHANGELOG_STORAGE_KEY];
+      if (lastShownValue !== undefined && lastShownValue !== null && lastShownValue !== "") {
+        clearPendingChangelogVersion();
+        return;
+      }
+
+      openChangelogTab(typeof pendingValue === "string" ? pendingValue : null);
+    });
+  } catch (error) {
+    console.debug("Storage get failed for pending changelog version", error);
+  }
+}
+
+function persistChangelogVersion(version) {
+  const storage = api?.storage?.local;
+  if (!storage || typeof storage.set !== "function") {
+    clearPendingChangelogVersion();
+    return;
+  }
+  try {
+    const valueToStore = version || true;
+    storage.set({ [CHANGELOG_STORAGE_KEY]: valueToStore }, () => {
       if (api.runtime.lastError) {
         console.debug("Failed to persist changelog version:", api.runtime.lastError.message);
+        return;
       }
+      clearPendingChangelogVersion();
     });
   } catch (error) {
     console.debug("Storage set failed for changelog version", error);
@@ -277,49 +348,76 @@ function maybeShowChangelog(details) {
     return;
   }
 
+  if (reason !== "install" && reason !== "update") {
+    return;
+  }
+
   const manifest = api.runtime.getManifest();
   const currentVersion = manifest?.version;
-  if (!currentVersion) {
-    return;
-  }
-
   const storage = api?.storage?.local;
-  if (reason === "install") {
-    openChangelogTab(currentVersion);
+  const isInstall = reason === "install";
+
+  const showChangelog = () => {
+    openChangelogTab(currentVersion || null);
+  };
+
+  if (!storage || typeof storage.get !== "function") {
+    showChangelog();
     return;
   }
 
-  if (reason === "update") {
-    if (!storage || typeof storage.get !== "function") {
-      openChangelogTab(currentVersion);
-      return;
-    }
+  try {
+    storage.get([CHANGELOG_STORAGE_KEY, PENDING_CHANGELOG_STORAGE_KEY], (result) => {
+      if (api.runtime.lastError) {
+        console.debug("Changelog storage read failed:", api.runtime.lastError.message);
+        showChangelog();
+        return;
+      }
 
-    try {
-      storage.get(CHANGELOG_STORAGE_KEY, (result) => {
-        if (api.runtime.lastError) {
-          console.debug("Changelog storage read failed:", api.runtime.lastError.message);
-          openChangelogTab(currentVersion);
-          return;
+      const hasStoredValue = (value) => value !== undefined && value !== null && value !== "";
+      const lastShownValue = result?.[CHANGELOG_STORAGE_KEY];
+      const pendingValue = result?.[PENDING_CHANGELOG_STORAGE_KEY];
+
+      if (isInstall) {
+        if (hasStoredValue(pendingValue)) {
+          clearPendingChangelogVersion();
         }
-
-        const lastShownVersion = result?.[CHANGELOG_STORAGE_KEY];
-        if (lastShownVersion === currentVersion) {
-          return;
+        if (!hasStoredValue(lastShownValue)) {
+          showChangelog();
         }
+        return;
+      }
 
-        openChangelogTab(currentVersion);
-      });
-    } catch (error) {
-      console.debug("Storage get failed for changelog version", error);
-      openChangelogTab(currentVersion);
-    }
+      if (hasStoredValue(lastShownValue)) {
+        return;
+      }
+
+      if (hasStoredValue(pendingValue)) {
+        if (currentVersion && pendingValue !== currentVersion) {
+          scheduleChangelogVersion(currentVersion);
+        }
+        return;
+      }
+
+      if (!scheduleChangelogVersion(currentVersion || null)) {
+        showChangelog();
+      }
+    });
+  } catch (error) {
+    console.debug("Storage get failed for changelog version", error);
+    showChangelog();
   }
 }
 
 api.runtime.onInstalled.addListener((details) => {
   maybeShowChangelog(details);
 });
+
+if (api?.runtime?.onStartup && typeof api.runtime.onStartup.addListener === "function") {
+  api.runtime.onStartup.addListener(() => {
+    showPendingChangelogIfNeeded();
+  });
+}
 
 // api.storage.sync.get(['lastShowChangelogVersion'], (details) => {
 //   if (extConfig.showUpdatePopup === true &&
