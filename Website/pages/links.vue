@@ -10,12 +10,12 @@
 
     <v-btn class="mainAltButton" :href="githubLink" target="_blank">
       <v-icon style="margin-right: 0.5em">mdi-github</v-icon>
-      {{ $vuetify.lang.t("$vuetify.links.github") }}
+      GitHub
     </v-btn>
 
     <v-btn class="mainAltButton" :href="discordLink" target="_blank">
       <v-icon style="margin-right: 0.5em">mdi-discord</v-icon>
-      {{ $vuetify.lang.t("$vuetify.links.discord") }}
+      Discord
     </v-btn>
 
     <h1 style="margin-top: 1em">
@@ -27,10 +27,14 @@
 
     <p style="color: #555" class="my-8">
       Site by <v-icon color="#555">mdi-discord</v-icon>
-      <a class="attr-link" href="https://github.com/Frontesque" target="_blank"> Front#2990 </a>
+      <a class="attr-link" href="https://github.com/Frontesque" target="_blank">
+        Front#2990
+      </a>
       <br />
       & <v-icon color="#555">mdi-discord</v-icon>
-      <a class="attr-link" href="https://github.com/PickleNik" target="_blank"> PickleNik#0864 </a>
+      <a class="attr-link" href="https://github.com/PickleNik" target="_blank">
+        PickleNik#0864
+      </a>
     </p>
     <!-- Translators -->
     <div style="color: #555; width: 250px" class="my-8">
@@ -38,7 +42,11 @@
         {{ $vuetify.lang.t("$vuetify.links.translators") }}
       </b>
       <br />
-      <div v-for="translator in translators" :key="translator.tag" class="d-flex">
+      <div
+        v-for="translator in translators"
+        :key="translator.tag"
+        class="d-flex"
+      >
         {{ translator.lang }} - <v-spacer /> {{ translator.tag }}
       </div>
     </div>
@@ -48,7 +56,11 @@
         {{ $vuetify.lang.t("$vuetify.links.coolProjects") }}
       </b>
       <br />
-      <div v-for="project in coolProjects" :key="project.url" class="d-flex justify-center">
+      <div
+        v-for="project in coolProjects"
+        :key="project.url"
+        class="d-flex justify-center"
+      >
         <a class="attr-link" :href="project.url" target="_blank"
           >{{ project.name }} - {{ $vuetify.lang.t(project.description) }}
         </a>
@@ -64,7 +76,9 @@ export default {
     let routes = ["index", "install", "docs", "help", "faq", "donate", "links"];
     if (routes.indexOf(to.name) < 0) return "swoop-out";
     if (routes.indexOf(from.name) < 0) return "swoop-in";
-    return routes.indexOf(to.name) > routes.indexOf(from.name) ? "swoop-left" : "swoop-right";
+    return routes.indexOf(to.name) > routes.indexOf(from.name)
+      ? "swoop-left"
+      : "swoop-right";
   },
   data: () => ({
     githubLink: "https://github.com/Anarios/return-youtube-dislike",
@@ -111,25 +125,16 @@ export default {
         tag: "liberaldev",
         lang: "한국어",
       },
-      {
         tag: "itsbudyn#6502",
         lang: "Polski",
       },
       {
         tag: "ArtisGraphics",
-        lang: "Deutsch",
+        lang: "Deutsch"
       },
       {
         tag: "gpap#3743",
         lang: "Magyar",
-      },
-      {
-        tag: "naufalk25",
-        lang: "Bahasa Indonesia",
-      },
-      {
-        tag: "khangquangtran",
-        lang: "Tiếng Việt",
       },
     ],
     coolProjects: [
